@@ -322,11 +322,16 @@ async function main() {
 
     // ---------- OG meta ----------
     console.log('\n[12] SPA 与 OG 注入');
-    r = await fetch(`${BASE}/prompt/${pid}`);
-    const html = await r.text();
-    check('提示词页注入 og:title', html.includes('og:title') && html.includes('og:description'));
-    r = await fetch(`${BASE}/feed`);
-    check('SPA 回退正常', r.status === 200 && (await r.text()).includes('<div id="root">'));
+    const distIndex = path.resolve(import.meta.dirname, '..', 'dist', 'index.html');
+    if (!fs.existsSync(distIndex)) {
+      console.log('  – 跳过（未找到 dist/，请先 npm run build）');
+    } else {
+      r = await fetch(`${BASE}/prompt/${pid}`);
+      const html = await r.text();
+      check('提示词页注入 og:title', html.includes('og:title') && html.includes('og:description'));
+      r = await fetch(`${BASE}/feed`);
+      check('SPA 回退正常', r.status === 200 && (await r.text()).includes('<div id="root">'));
+    }
 
     // ---------- 日志 ----------
     r = await api('/api/admin/logs?page=1&pageSize=5', { token: admin2.token });
