@@ -1,13 +1,20 @@
 # ⚡ PromptHub - 提示词管理平台
 
+[![CI](https://github.com/mllt992/prompt-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/mllt992/prompt-hub/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mllt992/prompt-hub)](https://github.com/mllt992/prompt-hub/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+当前版本 **v1.1.0** · 源码 [mllt992/prompt-hub](https://github.com/mllt992/prompt-hub) · 发行版 [Releases](https://github.com/mllt992/prompt-hub/releases)
+
 像 GitHub 一样管理 AI 提示词：支持**私密收藏**与**公开分享**，拥有**个人主页**，覆盖文本对话、图像生成、视频生成、项目工作流等场景，可为每条提示词附加**效果图**与**相关链接**。
 
 ## 功能
 
 - 🔐 用户系统：注册 / 登录（JWT），改密后全端会话立即失效
-- 🛡 管理后台 `/admin`：概览统计、用户管理（封禁/解封/设管理员/删除/重置密码）、提示词管理（含私密，强制改可见性 / 强制 NSFW / 删除）、动态管理、**举报处理队列**、**系统更新（检测 GitHub Release / 一键升级）**、站点设置（注册开关 + 邀请码）
+- 🛡 管理后台 `/admin`：概览统计、用户管理（封禁/解封/设管理员/删除/重置密码）、提示词管理（含私密，强制改可见性 / 强制 NSFW / 删除）、动态管理、**举报处理队列**、**系统更新**、站点设置（注册开关 + 邀请码）
   - 封禁立即生效：被封禁用户无法登录，已有 token 在下次请求即失效，其公开内容不再对外展示
   - 系统始终保持至少一名管理员，防止误操作自锁
+  - 系统更新：对照 GitHub Release 检查新版本；生产模式下可一键升级并自动重启
 - 🗂 提示词管理：新建 / 编辑 / 删除，**公开 / 私密**一键切换
 - 📜 **版本历史**：发布与每次编辑自动存档，可查看并一键恢复任意历史版本（恢复也会生成新版本，历史不可变）
 - 💬 **评论区**：提示词支持评论（1000 字内），作者可管理自己提示词下的评论
@@ -34,13 +41,14 @@
 
 ## 安全特性
 
-- 登录 / 注册 / 上传 / 发帖 / 评论 / 举报接口限流（防爆破、防刷号、防灌屏）
+- 登录 / 注册 / 上传 / 发帖 / 评论 / 举报 / 一键更新接口限流（防爆破、防刷号、防灌屏）
 - 上传文件双重校验（MIME 白名单 + 文件魔数），禁用 SVG（防存储型 XSS），静态文件带 `X-Content-Type-Options: nosniff`
 - 修改密码后所有已签发 JWT 立即失效（`pwd_version` 机制），管理员重置密码同样吊销用户会话
 - 全站安全响应头（nosniff / DENY frame / Referrer-Policy / Permissions-Policy）
 - 注册保留用户名黑名单，防仿冒官方
 - 上传文件回收：编辑移除图片、删除提示词 / 用户时自动清理不再引用的上传文件
 - 提示词页注入 OG meta（分享到社交平台有标题/封面预览）
+- 一键更新只接受官方 GitHub 仓库的发布包，保留数据目录；失败时回滚源码
 
 ## 技术栈
 
@@ -48,6 +56,7 @@
 - 后端：Node.js + Express
 - 数据库：SQLite（better-sqlite3，文件型零配置）
 - 认证：JWT；图片上传：multer
+- 发版：GitHub Actions + GitHub Releases
 
 ## 快速开始
 
@@ -67,6 +76,8 @@ npm start          # 单端口 http://localhost:14021 托管全部服务
 # 冒烟测试（独立端口 + 临时数据目录，不碰开发数据）
 npm test
 ```
+
+生产模式需要先 `npm run build`，否则不会托管前端页面。健康检查 `GET /api/health` 会返回当前 `version`。
 
 ### 环境变量
 
@@ -88,43 +99,63 @@ npm test
 
 仓库已配置 GitHub Actions：
 
-- `CI`：推送到 `main` 或提交 PR 时运行冒烟测试与构建
-- `Release`：推送 `v*` 标签（或在 Actions 里手动运行）时创建 GitHub Release
+| 工作流 | 触发 | 作用 |
+| --- | --- | --- |
+| [CI](.github/workflows/ci.yml) | 推送 `main` / 提交 PR | `npm run build` + 冒烟测试 |
+| [Release](.github/workflows/release.yml) | 推送 `v*` 标签，或在 Actions 手动运行 | 测试通过后创建 GitHub Release |
 
 ```bash
-# 1. 修改 package.json 中的 version，例如 1.2.0
-# 2. 提交并打标签
-git add -A
+# 1. 把 package.json / package-lock.json 的 version 改成新版本，例如 1.2.0
+# 2. 提交并打标签（标签必须是 v 前缀，且与 package.json 一致）
+git add package.json package-lock.json
 git commit -m "chore: release v1.2.0"
 git tag v1.2.0
 git push origin main --tags
 ```
 
+也可在仓库 Actions 页手动运行 **Release**：会用当前 `package.json` 的 version 创建 `vX.Y.Z`。已存在的同名 Release 不会重复创建。
+
+实例里的「系统更新」读取的是 [GitHub Releases](https://github.com/mllt992/prompt-hub/releases) 的 **latest**，因此发版必须走 Release，而不是只推 commit。
+
 ## 在线更新
 
 管理员打开 `/admin` → **系统更新**：
 
-- 对照当前 `package.json` 版本与 GitHub 最新 Release
-- 生产模式（`npm start`）可一键下载源码包、覆盖应用文件、安装依赖、构建前端并自动重启
-- **不会**覆盖 `server/data/`（数据库与上传文件）、`.env`；`node_modules` 会按新版本重新安装
+1. 页面会对照当前 `package.json` 版本与 GitHub 最新 Release
+2. 有新版本时侧栏出现「新」，可查看更新说明
+3. 生产模式（`npm start`）点击 **一键更新**：下载官方 zipball → 备份源码 → 覆盖应用文件 → `npm install` → `npm run build` → 自动重启
+4. 更新过程可在页面日志中查看；服务重启后刷新即可
+
+约束与安全：
+
+- **不会**覆盖 `server/data/`（数据库、上传文件、JWT 密钥）、`.env`
+- `node_modules` 与 `dist` 会按新版本重新安装 / 构建
+- 下载地址必须来自配置的官方仓库；`package.json` 的 `name` 必须是 `prompt-hub`
+- 失败时回滚已覆盖的源码
 - 开发模式（`npm run dev` / `node --watch`）只支持检查更新，不支持一键升级
-- 容器或只读部署请设置 `DISABLE_SELF_UPDATE=1`，改走镜像 / 编排发版
+- 容器、只读文件系统或集群部署请设置 `DISABLE_SELF_UPDATE=1`，改走镜像 / 编排发版
+- 一键更新接口限流：每小时最多 6 次
+
+自建 fork 时设置 `GITHUB_REPO=你的用户名/仓库名`，并按上面的流程发 Release，更新检查才会指向你的仓库。
 
 ## 目录结构
 
 ```
+├── .github/workflows/ # CI 与自动发版
 ├── server/            # Express 后端
 │   ├── index.js       # 入口：安全头、限流、路由挂载、静态托管、SPA 回退 + OG 注入
 │   ├── db.js          # SQLite 建表与迁移、通知、上传文件回收
 │   ├── auth.js        # JWT 签发与校验（含 pwd_version 会话吊销）
 │   ├── ratelimit.js   # 滑动窗口限流中间件
 │   ├── seed.js        # 管理员初始化（环境变量可控）+ 演示数据（可选）
+│   ├── update.js      # GitHub Release 检查、一键更新、失败回滚与重启
 │   └── routes/        # auth / prompts / users / upload / admin / posts / notifications / reports
 ├── client/            # React 前端（Vite root）
 │   └── src/           # pages/ 页面组件 · components/ 通用组件（含 ShareModal 分享弹窗）· poster.js 分享海报生成
 ├── dist/              # npm run build 产物
 ├── scripts/
 │   └── smoke-test.mjs # 端到端冒烟测试（npm test）
+├── LICENSE            # MIT
 └── server/data/       # SQLite 数据库 + 上传的图片（自动创建，勿提交）
 ```
 
@@ -159,5 +190,10 @@ git push origin main --tags
 | GET/PATCH/DELETE | `/api/admin/prompts/:id` | 提示词管理：预览 / 可见性 / 强制 NSFW / 删除（管理员） |
 | GET/PUT | `/api/admin/reports` `/reports/:id` | 举报队列：筛选查看 / 处置·驳回（管理员） |
 | GET/PUT | `/api/admin/settings` | 站点设置：注册开关 + 邀请码（管理员） |
-| GET/POST | `/api/admin/update` | 检查 GitHub 最新版本 / 一键更新（管理员） |
-| GET | `/api/admin/update/status` | 一键更新进度（管理员） |
+| GET | `/api/admin/update` | 检查 GitHub 最新版本（管理员） |
+| POST | `/api/admin/update` | 一键更新到 latest Release（管理员，生产模式） |
+| GET | `/api/admin/update/status` | 一键更新进度与日志（管理员） |
+
+## License
+
+[MIT](LICENSE)
