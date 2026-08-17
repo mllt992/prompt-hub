@@ -64,7 +64,8 @@ async function main() {
       PORT: String(PORT),
       DATA_DIR: TMP_DIR,
       ADMIN_PASSWORD: 'test-admin-pass-1',
-      SEED_DEMO: '1'
+      SEED_DEMO: '1',
+      DISABLE_SELF_UPDATE: '1'
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -77,7 +78,9 @@ async function main() {
     // ---------- 基础 ----------
     console.log('\n[1] 公开接口与安全头');
     let r = await fetch(`${BASE}/api/health`);
-    check('health 返回 ok', (await r.json()).ok === true);
+    const health = await r.json();
+    check('health 返回 ok', health.ok === true);
+    check('health 包含版本号', typeof health.version === 'string' && /^\d+\.\d+\.\d+/.test(health.version));
     r = await fetch(`${BASE}/api/prompts`);
     check('安全头 nosniff', r.headers.get('x-content-type-options') === 'nosniff');
     r = await fetch(`${BASE}/api/not-exist`);
@@ -330,6 +333,16 @@ async function main() {
     check('管理日志分页', r.status === 200 && r.data.total >= 5 && r.data.items.length <= 5);
     r = await api('/api/admin/logs?action=nsfw', { token: admin2.token });
     check('日志按动作筛选', r.data.items.every((l) => l.action.includes('nsfw')));
+
+    console.log('\n[13] 在线更新');
+    r = await api('/api/admin/update', { token: bobNewToken });
+    check('普通用户不能检查更新', r.status === 403);
+    r = await api('/api/admin/update', { token: admin2.token });
+    check('管理员可检查更新', r.status === 200 && r.data.current === health.version && r.data.disabled === true);
+    r = await api('/api/admin/update', { method: 'POST', token: admin2.token });
+    check('禁用自更新时拒绝一键更新', r.status === 403);
+    r = await api('/api/admin/update/status', { token: admin2.token });
+    check('更新状态可查询', r.status === 200 && typeof r.data.state === 'string');
 
     console.log(`\n========== 结果：${passed} 通过 / ${failed} 失败 ==========`);
     if (failures.length) {

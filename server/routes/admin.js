@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import db, { getSetting, setSetting, logAdmin, deleteUploadFiles } from '../db.js';
 import { adminRequired } from '../auth.js';
+import { applyLatestUpdate, getUpdateInfo, isUpdateBusy, readStatus } from '../update.js';
 
 const router = Router();
 router.use(adminRequired);
@@ -339,6 +340,46 @@ router.put('/reports/:id(\\d+)', (req, res) => {
   db.prepare('UPDATE reports SET status = ? WHERE id = ?').run(status, report.id);
   logAdmin(req.user.id, `report_${status}`, `#${report.id} ${report.target_type}#${report.target_id} ${report.reason}`);
   res.json({ ok: true });
+});
+
+// ---------- 在线更新 ----------
+router.get('/update', async (_req, res) => {
+  try {
+    res.json(await getUpdateInfo());
+  } catch (err) {
+    res.status(502).json({ error: err.message || '检查更新失败' });
+  }
+});
+
+router.get('/update/status', (_req, res) => {
+  res.json(readStatus());
+});
+
+router.post('/update', async (req, res) => {
+  try {
+    const preview = await getUpdateInfo();
+    if (preview.disabled) {
+      return res.status(403).json({ error: '当前部署已禁用自更新（DISABLE_SELF_UPDATE）' });
+    }
+    if (preview.watchMode) {
+      return res.status(400).json({ error: '开发模式（--watch）不支持一键更新，请使用生产模式 npm start' });
+    }
+    if (isUpdateBusy()) return res.status(409).json({ error: '更新正在进行中' });
+    if (preview.error) return res.status(502).json({ error: preview.error });
+    if (!preview.hasUpdate) {
+      return res.status(400).json({
+        error: preview.latest ? '当前已是最新版本' : '尚未在 GitHub 发布正式版本'
+      });
+    }
+
+    logAdmin(req.user.id, 'apply_update', `${preview.current} → ${preview.latest}`);
+    res.json({ started: true, from: preview.current, to: preview.latest });
+    applyLatestUpdate().catch((err) => {
+      console.error('[update]', err);
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || '更新失败' });
+  }
 });
 
 // ---------- 站点设置 ----------

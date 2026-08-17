@@ -886,6 +886,151 @@ function ReportsSection({ askConfirm, refreshCounts }) {
   );
 }
 
+/* ================= 系统更新 ================= */
+
+function UpdateSection() {
+  const [info, setInfo] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [offline, setOffline] = useState(false);
+
+  const busy = ['downloading', 'extracting', 'installing', 'building', 'restarting'].includes(status?.state);
+
+  const loadInfo = useCallback(async (opts = {}) => {
+    if (!opts.silent) setChecking(true);
+    try {
+      const d = await api('/admin/update');
+      setInfo(d);
+      setStatus(d.status || null);
+      setOffline(false);
+      return d;
+    } catch (err) {
+      if (opts.allowOffline) {
+        setOffline(true);
+        return null;
+      }
+      toast(err.message, 'error');
+      return null;
+    } finally {
+      if (!opts.silent) setChecking(false);
+    }
+  }, []);
+
+  useEffect(() => { loadInfo(); }, [loadInfo]);
+
+  useEffect(() => {
+    if (!busy && !offline) return undefined;
+    const timer = setInterval(async () => {
+      try {
+        const s = await api('/admin/update/status');
+        setStatus(s);
+        setOffline(false);
+        if (s.state === 'done') {
+          const d = await loadInfo({ silent: true, allowOffline: true });
+          if (d) toast(`已更新到 v${d.current}`);
+        }
+        if (s.state === 'error') toast(s.message || '更新失败', 'error');
+      } catch {
+        setOffline(true);
+      }
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [busy, offline, loadInfo]);
+
+  const startUpdate = async () => {
+    setStarting(true);
+    try {
+      const d = await api('/admin/update', { method: 'POST' });
+      setStatus({ state: 'downloading', from: d.from, to: d.to, log: [], message: `开始下载 ${d.to}` });
+      toast(`开始更新到 v${d.to}`);
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  if (!info) return <span className="spinner" />;
+
+  const canApply = info.hasUpdate && !info.disabled && !info.watchMode && !busy && !starting;
+  const blockReason = info.disabled
+    ? '当前部署已禁用自更新（DISABLE_SELF_UPDATE）'
+    : info.watchMode
+      ? '开发模式（npm run dev / --watch）不支持一键更新，请使用生产模式 npm start'
+      : '';
+
+  return (
+    <div className="update-stack">
+      <div className="panel update-panel">
+        <div className="update-versions">
+          <div>
+            <div className="lbl">当前版本</div>
+            <div className="update-ver">v{info.current}</div>
+          </div>
+          <div>
+            <div className="lbl">最新版本</div>
+            <div className={`update-ver ${info.hasUpdate ? 'is-new' : ''}`}>
+              {info.latest ? `v${info.latest}` : '暂无正式版'}
+            </div>
+          </div>
+          <div>
+            <div className="lbl">状态</div>
+            <div className="update-state">
+              {offline ? '服务重启中…' : info.hasUpdate ? '发现新版本' : info.latest ? '已是最新' : '尚未发版'}
+            </div>
+          </div>
+        </div>
+
+        {info.publishedAt && (
+          <div className="update-meta">发布于 {info.publishedAt.replace('T', ' ').slice(0, 16)} UTC</div>
+        )}
+        {info.error && <div className="update-error">检查失败：{info.error}</div>}
+        {blockReason && (
+          <div className="settings-hint">
+            <Icon name="info" size={15} />
+            {blockReason}
+          </div>
+        )}
+
+        {info.notes && (
+          <div className="update-notes">
+            <div className="lbl">更新说明</div>
+            <pre>{info.notes}</pre>
+          </div>
+        )}
+
+        <div className="form-actions update-actions">
+          <button className="btn" disabled={checking || busy} onClick={() => loadInfo()}>
+            <Icon name="refreshCw" size={14} /> {checking ? '检查中…' : '检查更新'}
+          </button>
+          <button className="btn btn-primary" disabled={!canApply} onClick={startUpdate}>
+            <Icon name="download" size={14} /> {starting || busy ? '更新中…' : '一键更新'}
+          </button>
+          {info.htmlUrl && (
+            <a className="btn" href={info.htmlUrl} target="_blank" rel="noreferrer">
+              <Icon name="link" size={14} /> GitHub Release
+            </a>
+          )}
+        </div>
+      </div>
+
+      {(status?.log?.length || busy || offline || status?.state === 'error' || status?.state === 'done') && (
+        <div className="panel">
+          <h3 className="section-title"><Icon name="activity" size={15} /> 更新日志</h3>
+          <div className="update-log" aria-live="polite">
+            {(status?.log || []).map((line, i) => <div key={`${i}-${line}`}>{line}</div>)}
+            {offline && <div>等待服务重新上线…</div>}
+            {status?.state === 'done' && <div>完成：{status.message}</div>}
+            {status?.state === 'error' && <div className="update-error">失败：{status.message}</div>}
+            {!status?.log?.length && busy && <div>{status.message || '处理中…'}</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ================= 站点设置 ================= */
 
 function SettingsSection({ refreshCounts }) {
@@ -947,6 +1092,7 @@ const SECTIONS = [
   { key: 'prompts', label: '提示词管理', icon: 'folder' },
   { key: 'posts', label: '动态管理', icon: 'activity' },
   { key: 'reports', label: '举报处理', icon: 'flag' },
+  { key: 'update', label: '系统更新', icon: 'download' },
   { key: 'settings', label: '站点设置', icon: 'shield' }
 ];
 
@@ -956,6 +1102,7 @@ const SECTION_DESC = {
   prompts: '全站提示词（含私密）的检索、批量可见性、NSFW 标记与删除',
   posts: '全站动态的检索与删除',
   reports: '处理用户举报：查看对象、处置或驳回',
+  update: '检查 GitHub Release，并在生产模式下将本实例一键升级到最新版',
   settings: '注册开放开关与邀请码控制'
 };
 
@@ -963,6 +1110,7 @@ export default function AdminPage() {
   const [section, setSection] = useState('overview');
   const [stats, setStats] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [hasUpdate, setHasUpdate] = useState(false);
 
   const refreshCounts = useCallback(() => {
     api('/admin/stats').then(setStats).catch(() => {});
@@ -970,6 +1118,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     refreshCounts();
+    api('/admin/update').then((d) => setHasUpdate(!!d.hasUpdate)).catch(() => {});
   }, [refreshCounts]);
 
   const askConfirm = (title, message, onOk, danger = true, confirmText = '确认') =>
@@ -994,6 +1143,7 @@ export default function AdminPage() {
                 onClick={() => setSection(s.key)}
               >
                 <Icon name={s.icon} size={16} /> {s.label}
+                {s.key === 'update' && hasUpdate && <span className="count count-update">新</span>}
                 {counts[s.key] !== undefined && <span className="count">{counts[s.key]}</span>}
               </button>
             ))}
@@ -1012,6 +1162,7 @@ export default function AdminPage() {
           {section === 'prompts' && <PromptsSection askConfirm={askConfirm} refreshCounts={refreshCounts} />}
           {section === 'posts' && <PostsSection askConfirm={askConfirm} refreshCounts={refreshCounts} />}
           {section === 'reports' && <ReportsSection askConfirm={askConfirm} refreshCounts={refreshCounts} />}
+          {section === 'update' && <UpdateSection />}
           {section === 'settings' && <SettingsSection refreshCounts={refreshCounts} />}
         </main>
       </div>

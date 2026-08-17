@@ -1,8 +1,12 @@
 {
   "name": "prompt-hub",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "类 GitHub 的提示词管理平台：支持私密/公开分享、个人主页、效果图与链接附件",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mllt992/prompt-hub.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "concurrently -n server,web -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",

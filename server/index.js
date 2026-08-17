@@ -14,9 +14,12 @@ import adminRoutes from './routes/admin.js';
 import postRoutes from './routes/posts.js';
 import notificationRoutes from './routes/notifications.js';
 import reportRoutes from './routes/reports.js';
+import { currentVersion, finalizeUpdateStatus } from './update.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 14021;
+const APP_VERSION = currentVersion();
+finalizeUpdateStatus();
 
 await import('./seed.js');
 
@@ -41,6 +44,7 @@ app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60_000, max: 15, message: 
 app.use('/api/auth/register', rateLimit({ windowMs: 60 * 60_000, max: 5, message: '注册请求过于频繁，请稍后再试' }));
 app.use('/api/upload', rateLimit({ windowMs: 60 * 60_000, max: 40, message: '上传过于频繁，请稍后再试' }));
 app.use('/api/reports', rateLimit({ windowMs: 60 * 60_000, max: 15, message: '举报提交过于频繁，请稍后再试' }));
+app.post('/api/admin/update', rateLimit({ windowMs: 60 * 60_000, max: 6, message: '更新请求过于频繁，请稍后再试' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/prompts', promptRoutes);
@@ -53,7 +57,12 @@ app.use('/api/reports', reportRoutes);
 
 // 健康检查（供负载均衡 / 监控探活）
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, uptime: Math.round(process.uptime()), now: new Date().toISOString() });
+  res.json({
+    ok: true,
+    version: APP_VERSION,
+    uptime: Math.round(process.uptime()),
+    now: new Date().toISOString()
+  });
 });
 
 // 公开站点设置（注册页据此展示开放状态与是否需要邀请码，不泄露邀请码本身）
@@ -130,5 +139,5 @@ app.use((err, _req, res, _next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[prompt-hub] API 服务已启动: http://localhost:${PORT}`);
+  console.log(`[prompt-hub] API 服务已启动: http://localhost:${PORT}  (v${APP_VERSION})`);
 });

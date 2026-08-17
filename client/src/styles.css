@@ -1151,6 +1151,10 @@ img.nsfw-hidden {
   border-radius: 999px;
   padding: 1px 8px;
 }
+.admin-nav-item .count-update {
+  color: #fff;
+  background: var(--accent);
+}
 .admin-side-foot {
   margin-top: 8px;
   padding-top: 10px;
@@ -1566,6 +1570,55 @@ img.nsfw-hidden {
 
 /* ---------- 管理端举报 ---------- */
 .report-open-row { background: var(--danger-subtle); }
+
+/* ---------- 系统更新 ---------- */
+.update-stack { display: flex; flex-direction: column; gap: 16px; max-width: 720px; }
+.update-versions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.update-versions .lbl,
+.update-notes .lbl { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.update-ver { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; }
+.update-ver.is-new { color: var(--accent); }
+.update-state { font-size: 15px; font-weight: 600; }
+.update-meta { font-size: 13px; color: var(--muted); margin: 4px 0 10px; }
+.update-notes {
+  margin: 14px 0 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.update-notes pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.55;
+  font-family: inherit;
+  color: var(--text-2);
+}
+.update-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.update-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.update-log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  max-height: 260px;
+  overflow: auto;
+  color: var(--text-2);
+}
+.update-error { color: var(--danger); font-size: 13px; margin: 8px 0; }
+@media (max-width: 720px) {
+  .update-versions { grid-template-columns: 1fr; }
+}
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 960px) {

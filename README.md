@@ -5,7 +5,7 @@
 ## 功能
 
 - 🔐 用户系统：注册 / 登录（JWT），改密后全端会话立即失效
-- 🛡 管理后台 `/admin`：概览统计、用户管理（封禁/解封/设管理员/删除/重置密码）、提示词管理（含私密，强制改可见性 / 强制 NSFW / 删除）、动态管理、**举报处理队列**、站点设置（注册开关 + 邀请码）
+- 🛡 管理后台 `/admin`：概览统计、用户管理（封禁/解封/设管理员/删除/重置密码）、提示词管理（含私密，强制改可见性 / 强制 NSFW / 删除）、动态管理、**举报处理队列**、**系统更新（检测 GitHub Release / 一键升级）**、站点设置（注册开关 + 邀请码）
   - 封禁立即生效：被封禁用户无法登录，已有 token 在下次请求即失效，其公开内容不再对外展示
   - 系统始终保持至少一名管理员，防止误操作自锁
 - 🗂 提示词管理：新建 / 编辑 / 删除，**公开 / 私密**一键切换
@@ -78,8 +78,37 @@ npm test
 | `ADMIN_EMAIL` | 管理员邮箱 | `admin@prompthub.local` |
 | `SEED_DEMO` | `1` 时写入演示数据（demo / demo123456） | 不写入 |
 | `TRUST_PROXY` | 反向代理部署时设置（如 `1`），保证限流取到真实 IP | 不启用 |
+| `GITHUB_REPO` | 检查更新使用的 GitHub 仓库 `owner/name` | `mllt992/prompt-hub` |
+| `GITHUB_TOKEN` | 可选，提高 GitHub API 限额；公开仓库通常不需要 | 空 |
+| `DISABLE_SELF_UPDATE` | `1` 时禁止一键更新（容器 / 集群部署建议开启） | 不禁用 |
 
 > 生产部署建议：设置 `ADMIN_PASSWORD`、不开启 `SEED_DEMO`、位于 Nginx 等反代之后时设置 `TRUST_PROXY=1` 并强制 HTTPS。
+
+## 发版
+
+仓库已配置 GitHub Actions：
+
+- `CI`：推送到 `main` 或提交 PR 时运行冒烟测试与构建
+- `Release`：推送 `v*` 标签（或在 Actions 里手动运行）时创建 GitHub Release
+
+```bash
+# 1. 修改 package.json 中的 version，例如 1.2.0
+# 2. 提交并打标签
+git add -A
+git commit -m "chore: release v1.2.0"
+git tag v1.2.0
+git push origin main --tags
+```
+
+## 在线更新
+
+管理员打开 `/admin` → **系统更新**：
+
+- 对照当前 `package.json` 版本与 GitHub 最新 Release
+- 生产模式（`npm start`）可一键下载源码包、覆盖应用文件、安装依赖、构建前端并自动重启
+- **不会**覆盖 `server/data/`（数据库与上传文件）、`.env`；`node_modules` 会按新版本重新安装
+- 开发模式（`npm run dev` / `node --watch`）只支持检查更新，不支持一键升级
+- 容器或只读部署请设置 `DISABLE_SELF_UPDATE=1`，改走镜像 / 编排发版
 
 ## 目录结构
 
@@ -105,7 +134,7 @@ npm test
 | --- | --- | --- |
 | POST | `/api/auth/register` `/api/auth/login` | 注册（站点设置 + 邀请码 + 保留名校验）/ 登录（限流） |
 | PUT | `/api/auth/password` | 修改密码（吊销全部旧会话，返回新 token） |
-| GET | `/api/settings` `/api/health` | 公开站点设置 / 健康检查 |
+| GET | `/api/settings` `/api/health` | 公开站点设置 / 健康检查（含 `version`） |
 | GET | `/api/prompts` | 公开信息流（q / category / tag / username / sort / page，过滤封禁作者） |
 | GET/POST/PUT/DELETE | `/api/prompts/:id` | 详情（浏览量去重）/ 新建 / 编辑 / 删除 |
 | PATCH | `/api/prompts/:id/visibility` | 公开 ⇄ 私密切换 |
@@ -130,3 +159,5 @@ npm test
 | GET/PATCH/DELETE | `/api/admin/prompts/:id` | 提示词管理：预览 / 可见性 / 强制 NSFW / 删除（管理员） |
 | GET/PUT | `/api/admin/reports` `/reports/:id` | 举报队列：筛选查看 / 处置·驳回（管理员） |
 | GET/PUT | `/api/admin/settings` | 站点设置：注册开关 + 邀请码（管理员） |
+| GET/POST | `/api/admin/update` | 检查 GitHub 最新版本 / 一键更新（管理员） |
+| GET | `/api/admin/update/status` | 一键更新进度（管理员） |
