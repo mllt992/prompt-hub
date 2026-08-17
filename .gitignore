@@ -1,0 +1,13 @@
+node_modules/
+dist/
+server/data/
+gui-test-screenshots/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+*.db
+*.db-shm
+*.db-wal
